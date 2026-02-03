@@ -107,6 +107,25 @@ Edit `static/css/style.css` to change gradient colors and styling.
 **Issue**: Port 5000 already in use
 - Change the port in `app.py`: `app.run(debug=True, port=5001)`
 
+## Deploying to Render
+
+1. Create a new Web Service on Render and connect your GitHub repository (https://github.com/dekopon1/stock-dashboard).
+2. For the build command use:
+
+```
+pip install -r requirements.txt
+```
+
+3. For the start command use:
+
+```
+gunicorn app:app
+```
+
+4. Add environment variables on Render for `NEWS_API_KEY` and `STOCK_API_KEY` (if you use them). Render will provide a `PORT` environment variable automatically.
+
+This repo includes a `Procfile` and `render.yaml` to simplify deployment.
+
 ## Future Enhancements
 
 - Real-time WebSocket updates
