@@ -14,7 +14,7 @@ app = Flask(__name__)
 STOCKS = ['MSFT', 'GOOG', 'AAPL', 'CRM', 'NVDA', 'AMZN', 'META', 'ORCL']
 
 # Load API keys from environment (.env or environment variables)
-# Example .env keys: STOCK_API_KEY (AlphaVantage), NEWS_API_KEY (NewsAPI)
+# Example .env keys: STOCK_API_KEY (Finnhub), NEWS_API_KEY (NewsAPI)
 STOCK_API_KEY = os.getenv('STOCK_API_KEY')
 NEWS_API_KEY = os.getenv('NEWS_API_KEY')
 
@@ -23,8 +23,8 @@ if not STOCK_API_KEY:
 if not NEWS_API_KEY:
     print('Warning: NEWS_API_KEY not set. Using fallback demo news.')
 
-# AlphaVantage API endpoint
-ALPHA_VANTAGE_BASE_URL = 'https://www.alphavantage.co/query'
+# Finnhub API endpoint
+FINNHUB_BASE_URL = 'https://finnhub.io/api/v1/quote'
 
 @app.route('/')
 def index():
@@ -32,7 +32,7 @@ def index():
 
 @app.route('/api/stocks')
 def get_stocks():
-    """Fetch current stock prices from AlphaVantage API"""
+    """Fetch current stock prices from Finnhub API"""
     stocks_data = {}
     
     if not STOCK_API_KEY:
@@ -43,36 +43,29 @@ def get_stocks():
     
     for symbol in STOCKS:
         try:
-            # Call AlphaVantage GLOBAL_QUOTE endpoint
+            # Call Finnhub quote endpoint
             params = {
-                'function': 'GLOBAL_QUOTE',
                 'symbol': symbol,
-                'apikey': STOCK_API_KEY
+                'token': STOCK_API_KEY
             }
-            response = requests.get(ALPHA_VANTAGE_BASE_URL, params=params, timeout=5)
+            response = requests.get(FINNHUB_BASE_URL, params=params, timeout=5)
             
             if response.status_code == 200:
-                data = response.json()
-                quote = data.get('Global Quote', {})
+                quote = response.json()
                 
                 # Check for API error messages
-                if 'Error Message' in data:
-                    print(f"AlphaVantage error for {symbol}: {data['Error Message']}")
+                if isinstance(quote, dict) and 'error' in quote:
+                    print(f"Finnhub error for {symbol}: {quote['error']}")
                     stocks_data[symbol] = get_fallback_stock_data(symbol)
                     continue
                 
-                if 'Note' in data:
-                    # Rate limit hit
-                    print(f"AlphaVantage rate limit for {symbol}: {data['Note']}. Using fallback.")
-                    stocks_data[symbol] = get_fallback_stock_data(symbol)
-                    continue
+                # Finnhub response keys: c = current price, pc = previous close
+                current_price = quote.get('c')
+                prev_close = quote.get('pc')
                 
-                price = quote.get('05. price')
-                prev_close = quote.get('08. previous close')
-                
-                if price and prev_close:
+                if current_price is not None and prev_close is not None:
                     try:
-                        current_price = float(price)
+                        current_price = float(current_price)
                         previous_close = float(prev_close)
                         change = current_price - previous_close
                         change_percent = (change / previous_close * 100) if previous_close != 0 else 0

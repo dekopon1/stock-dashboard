@@ -21,14 +21,14 @@ pip install -r requirements.txt
 
 ### 2. Add API Keys (Required for Stock Prices)
 
-**Stock API (Required):** Sign up for a free AlphaVantage API key at [https://www.alphavantage.co/](https://www.alphavantage.co/). Free tier: 5 requests/min, 500 requests/day.
+**Stock API (Required):** Sign up for a free Finnhub API key at [https://finnhub.io/](https://finnhub.io/). Free tier: 60 requests/min.
 
 **News API (Optional):** For live news stories, sign up at [NewsAPI.org](https://newsapi.org/).
 
 Create a file named `.env` in the project root with:
 
 ```env
-STOCK_API_KEY=your_alphavantage_key_here
+STOCK_API_KEY=your_finnhub_key_here
 NEWS_API_KEY=your_newsapi_key_here
 ```
 
@@ -73,7 +73,7 @@ The dashboard will be available at: **http://localhost:5000**
 
 ## Data Sources
 
-- **Stock Prices**: AlphaVantage API (free tier, 5 requests/min, 500 requests/day)
+- **Stock Prices**: Finnhub API (free tier, 60 requests/min)
 - **News**: NewsAPI.org (optional, uses fallback demo data if not configured)
 
 ## Customization
