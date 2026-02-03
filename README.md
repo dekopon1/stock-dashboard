@@ -19,20 +19,22 @@ An interactive real-time stock price dashboard displaying live data for major te
 pip install -r requirements.txt
 ```
 
-### 2. (Optional) Add API keys (recommended)
+### 2. Add API Keys (Required for Stock Prices)
 
-For live news data, sign up at [NewsAPI.org](https://newsapi.org/). Store keys in a `.env` file or as environment variables instead of hard-coding them.
+**Stock API (Required):** Sign up for a free AlphaVantage API key at [https://www.alphavantage.co/](https://www.alphavantage.co/). Free tier: 5 requests/min, 500 requests/day.
+
+**News API (Optional):** For live news stories, sign up at [NewsAPI.org](https://newsapi.org/).
 
 Create a file named `.env` in the project root with:
 
 ```env
+STOCK_API_KEY=your_alphavantage_key_here
 NEWS_API_KEY=your_newsapi_key_here
-STOCK_API_KEY=your_stock_api_key_here
 ```
 
 The app uses `python-dotenv` to load `.env` automatically. Alternatively set environment variables directly.
 
-> **Note:** If `NEWS_API_KEY` isn't set the app will use fallback demo news data.
+> **Note:** If `STOCK_API_KEY` isn't set, the app will use fallback demo stock data. If `NEWS_API_KEY` isn't set, fallback demo news will display.
 
 ### 3. Run the Application
 
@@ -71,7 +73,7 @@ The dashboard will be available at: **http://localhost:5000**
 
 ## Data Sources
 
-- **Stock Prices**: Yahoo Finance API (free, no key required)
+- **Stock Prices**: AlphaVantage API (free tier, 5 requests/min, 500 requests/day)
 - **News**: NewsAPI.org (optional, uses fallback demo data if not configured)
 
 ## Customization

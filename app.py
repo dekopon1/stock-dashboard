@@ -2,7 +2,6 @@ from flask import Flask, render_template, jsonify
 import requests
 import json
 import os
-import yfinance as yf
 from dotenv import load_dotenv
 from datetime import datetime
 
@@ -15,12 +14,17 @@ app = Flask(__name__)
 STOCKS = ['MSFT', 'GOOG', 'AAPL', 'CRM', 'NVDA', 'AMZN', 'META', 'ORCL']
 
 # Load API keys from environment (.env or environment variables)
-# Example .env keys: STOCK_API_KEY, NEWS_API_KEY
+# Example .env keys: STOCK_API_KEY (AlphaVantage), NEWS_API_KEY (NewsAPI)
 STOCK_API_KEY = os.getenv('STOCK_API_KEY')
 NEWS_API_KEY = os.getenv('NEWS_API_KEY')
 
+if not STOCK_API_KEY:
+    print('Warning: STOCK_API_KEY not set. Using fallback demo stock data.')
 if not NEWS_API_KEY:
     print('Warning: NEWS_API_KEY not set. Using fallback demo news.')
+
+# AlphaVantage API endpoint
+ALPHA_VANTAGE_BASE_URL = 'https://www.alphavantage.co/query'
 
 @app.route('/')
 def index():
@@ -28,35 +32,70 @@ def index():
 
 @app.route('/api/stocks')
 def get_stocks():
-    """Fetch current stock prices"""
+    """Fetch current stock prices from AlphaVantage API"""
     stocks_data = {}
+    
+    if not STOCK_API_KEY:
+        print('STOCK_API_KEY not set. Using fallback data for all stocks.')
+        for symbol in STOCKS:
+            stocks_data[symbol] = get_fallback_stock_data(symbol)
+        return jsonify(stocks_data)
     
     for symbol in STOCKS:
         try:
-            # Fetch data using yfinance (handles Yahoo Finance auth properly)
-            ticker = yf.Ticker(symbol)
-            info = ticker.info
+            # Call AlphaVantage GLOBAL_QUOTE endpoint
+            params = {
+                'function': 'GLOBAL_QUOTE',
+                'symbol': symbol,
+                'apikey': STOCK_API_KEY
+            }
+            response = requests.get(ALPHA_VANTAGE_BASE_URL, params=params, timeout=5)
             
-            if 'regularMarketPrice' in info and info['regularMarketPrice'] is not None:
-                current_price = info['regularMarketPrice']
-                previous_close = info.get('previousClose', current_price)
-                change = current_price - previous_close
-                change_percent = (change / previous_close * 100) if previous_close != 0 else 0
+            if response.status_code == 200:
+                data = response.json()
+                quote = data.get('Global Quote', {})
                 
-                stocks_data[symbol] = {
-                    'price': round(current_price, 2),
-                    'change': round(change, 2),
-                    'changePercent': round(change_percent, 2),
-                    'isUp': change >= 0,
-                    'previousClose': round(previous_close, 2)
-                }
-                print(f"✓ Fetched live data for {symbol}: ${current_price}")
+                # Check for API error messages
+                if 'Error Message' in data:
+                    print(f"AlphaVantage error for {symbol}: {data['Error Message']}")
+                    stocks_data[symbol] = get_fallback_stock_data(symbol)
+                    continue
+                
+                if 'Note' in data:
+                    # Rate limit hit
+                    print(f"AlphaVantage rate limit for {symbol}: {data['Note']}. Using fallback.")
+                    stocks_data[symbol] = get_fallback_stock_data(symbol)
+                    continue
+                
+                price = quote.get('05. price')
+                prev_close = quote.get('08. previous close')
+                
+                if price and prev_close:
+                    try:
+                        current_price = float(price)
+                        previous_close = float(prev_close)
+                        change = current_price - previous_close
+                        change_percent = (change / previous_close * 100) if previous_close != 0 else 0
+                        
+                        stocks_data[symbol] = {
+                            'price': round(current_price, 2),
+                            'change': round(change, 2),
+                            'changePercent': round(change_percent, 2),
+                            'isUp': change >= 0,
+                            'previousClose': round(previous_close, 2)
+                        }
+                        print(f"✓ Fetched live data for {symbol}: ${current_price}")
+                    except (ValueError, TypeError) as ve:
+                        print(f"Error parsing price data for {symbol}: {ve}")
+                        stocks_data[symbol] = get_fallback_stock_data(symbol)
+                else:
+                    print(f"No price data for {symbol}. Using fallback.")
+                    stocks_data[symbol] = get_fallback_stock_data(symbol)
             else:
-                print(f"Could not fetch price for {symbol}. Using fallback.")
+                print(f"HTTP error {response.status_code} for {symbol}")
                 stocks_data[symbol] = get_fallback_stock_data(symbol)
         except Exception as e:
             print(f"Error fetching {symbol}: {e}")
-            print(f"Using fallback data for {symbol}.")
             stocks_data[symbol] = get_fallback_stock_data(symbol)
     
     return jsonify(stocks_data)
