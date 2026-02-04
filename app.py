@@ -305,6 +305,35 @@ def health():
         'cache_ttl_seconds': CACHE_TTL_SECONDS
     })
 
+
+@app.route('/api/models')
+def list_models_endpoint():
+    """Return the list of available models from the configured Gemini/GenAI client.
+
+    This endpoint is intentionally safe: it does not expose keys, only model
+    names and basic info returned by the SDK. Useful for diagnosing which
+    model identifiers are valid in the current environment.
+    """
+    if not GEMINI_API_KEY:
+        return jsonify({'success': False, 'error': 'GEMINI_API_KEY not configured'}), 503
+
+    try:
+        # The SDK exposes a list_models helper in many versions; handle
+        # multiple possible return shapes conservatively.
+        models = genai.list_models()
+        model_list = []
+        for m in models:
+            if isinstance(m, dict):
+                name = m.get('name') or m.get('model') or str(m)
+            else:
+                name = getattr(m, 'name', str(m))
+            model_list.append(name)
+
+        return jsonify({'success': True, 'models': model_list})
+    except Exception as e:
+        print(f"Error listing models: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
 if __name__ == '__main__':
     # Use the PORT environment variable provided by Render (or default to 5000)
     port = int(os.environ.get('PORT', 5000))
