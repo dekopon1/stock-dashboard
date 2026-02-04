@@ -29,6 +29,9 @@ if not GEMINI_API_KEY:
 else:
     genai.configure(api_key=GEMINI_API_KEY)
 
+# Default model identifier for Gemini; can be overridden via GEMINI_MODEL_ID env var
+GEMINI_MODEL_ID = os.getenv('GEMINI_MODEL_ID', 'models/gemini-2.5-flash')
+
 # Finnhub API endpoint
 FINNHUB_BASE_URL = 'https://finnhub.io/api/v1/quote'
 
@@ -140,7 +143,8 @@ def get_analysis(symbol):
     
     try:
         # Create Gemini model
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel(GEMINI_MODEL_ID)
+        print(f"Using Gemini model: {GEMINI_MODEL_ID}")
         
         # Get current stock data to include in prompt
         stock_info = stocks_data.get(symbol) if 'stocks_data' in globals() else {}
