@@ -265,6 +265,40 @@ def get_fallback_news(symbol):
         {'title': f'Latest news for {symbol}', 'description': 'Stay tuned for updates', 'url': '#', 'source': 'News', 'publishedAt': datetime.now().isoformat()}
     ])
 
+
+@app.route('/api/health')
+def health():
+    """Lightweight health/config endpoint that does NOT expose secrets.
+
+    Returns booleans indicating whether required API keys are configured,
+    plus a few internal stats useful for debugging deployments.
+    """
+    try:
+        gemini_ok = bool(GEMINI_API_KEY)
+    except NameError:
+        gemini_ok = False
+
+    try:
+        stock_ok = bool(STOCK_API_KEY)
+    except NameError:
+        stock_ok = False
+
+    try:
+        news_ok = bool(NEWS_API_KEY)
+    except NameError:
+        news_ok = False
+
+    cache_count = len(analysis_cache) if 'analysis_cache' in globals() else 0
+
+    return jsonify({
+        'success': True,
+        'gemini_configured': gemini_ok,
+        'stock_api_configured': stock_ok,
+        'news_api_configured': news_ok,
+        'analysis_cache_entries': cache_count,
+        'cache_ttl_seconds': CACHE_TTL_SECONDS
+    })
+
 if __name__ == '__main__':
     # Use the PORT environment variable provided by Render (or default to 5000)
     port = int(os.environ.get('PORT', 5000))
