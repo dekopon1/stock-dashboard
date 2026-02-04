@@ -144,14 +144,15 @@ def get_analysis(symbol):
         print(f"Using Gemini model: {GEMINI_MODEL_ID}")
 
         prompt = f"""
-Conduct a quick web search for recent news and market data about {symbol}.
+    Conduct a quick web search for recent news and market data about {symbol}.
 
-Provide a concise, focused analysis of WHY {symbol} moved today (or this week).
-1) Start with a one-sentence "Best guess:" stating the most likely driver.
-2) Follow with one short supporting paragraph (2-4 short sentences) citing the key evidence (e.g., earnings, product news, analyst action, macro/sector moves).
+    Provide a concise, focused analysis of WHY {symbol} moved today (or this week).
+    1) Start with a one-sentence "Best guess:" stating the most likely driver.
+    2) Follow with one short supporting paragraph (2-4 short sentences) citing the key evidence (e.g., earnings, product news, analyst action, macro/sector moves).
 
-If uncertain, explicitly say "most likely" and list at most 2 possible drivers. Do not provide long background or historical context. Keep the entire response to no more than two short paragraphs.
-"""
+    If uncertain, explicitly say "most likely" and list at most 2 possible drivers. Do not provide long background or historical context. Keep the entire response to no more than two short paragraphs.
+    Ensure the response ends with a complete sentence and does not cut off.
+    """
 
         print(f"Generating AI analysis for {symbol} (concise mode)...")
 
@@ -159,8 +160,8 @@ If uncertain, explicitly say "most likely" and list at most 2 possible drivers. 
             response = model.generate_content(
                 prompt,
                 generation_config=genai.types.GenerationConfig(
-                    temperature=0.2,
-                    max_output_tokens=600,
+                    temperature=0.15,
+                    max_output_tokens=1200,
                 )
             )
 
@@ -174,7 +175,7 @@ If uncertain, explicitly say "most likely" and list at most 2 possible drivers. 
 
             possibly_truncated = False
             try:
-                if analysis_len and analysis_len >= 550:
+                if analysis_len and analysis_len >= 1100:
                     possibly_truncated = True
                 if isinstance(analysis_text, str) and analysis_text.strip().endswith('...'):
                     possibly_truncated = True
