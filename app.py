@@ -158,21 +158,27 @@ Provide a comprehensive analysis including:
 Format your response in clear sections with markdown formatting. Keep it concise but informative."""
         
         print(f"Generating AI analysis for {symbol}...")
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.types.GenerationConfig(
-                temperature=0.7,
-                max_output_tokens=800,
-            ),
-            safety_settings=[
-                {
-                    "category": genai.types.HarmCategory.HARM_CATEGORY_UNSPECIFIED,
-                    "threshold": genai.types.HarmBlockThreshold.BLOCK_NONE,
-                }
-            ]
-        )
-        
-        analysis_text = response.text
+
+        # NOTE: avoid passing raw enum objects in safety_settings which
+        # can cause serialization/runtime errors on some versions of the
+        # google-generativeai package or the server. Use defaults and
+        # rely on the model's built-in safety if needed.
+        try:
+            response = model.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.7,
+                    max_output_tokens=800,
+                )
+            )
+
+            # response may expose `.text` or be a dict-like object depending
+            # on client version; handle both safely.
+            analysis_text = getattr(response, 'text', None) or (response.get('text') if isinstance(response, dict) else str(response))
+        except Exception as gen_exc:
+            # Log a clearer message to help debugging (do not expose secrets)
+            print(f"AI generation error for {symbol}: {repr(gen_exc)}")
+            raise
         
         # Cache the result
         analysis_cache[symbol] = (analysis_text, datetime.now())
