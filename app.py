@@ -164,25 +164,28 @@ Format your response in clear sections with markdown formatting. Keep it concise
         print(f"Generating AI analysis for {symbol}...")
 
         # NOTE: avoid passing raw enum objects in safety_settings which
-        # can cause serialization/runtime errors on some versions of the
-        # google-generativeai package or the server. Use defaults and
-        # rely on the model's built-in safety if needed.
-        try:
-            # Increase token budget to avoid mid-response truncation
-            response = model.generate_content(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=0.6,
-                    max_output_tokens=4096,
-                )
+            # Prompt Gemini to perform a brief web search and provide a short,
+            # focused analysis of WHY the stock moved today (or this week).
+            # Request a concise "best guess" (one sentence) followed by a
+            # short supporting paragraph (one brief paragraph). Keep to at
+            # most two short paragraphs.
+            prompt = f"""
+Conduct a quick web search for recent news and market data about {symbol}.
+
+Provide a concise, focused analysis of WHY {symbol} moved today (or this week).
+1) Start with a one-sentence "Best guess:" stating the most likely driver.
+2) Follow with one short supporting paragraph (2-4 short sentences) citing the key evidence (e.g., earnings, product news, analyst action, macro/sector moves).
+
+If uncertain, explicitly say "most likely" and list at most 2 possible drivers. Do not provide long background or historical context. Keep the entire response to no more than two short paragraphs.
+"""
             )
 
             # response may expose `.text` or be a dict-like object depending
             # on client version; handle both safely.
             analysis_text = getattr(response, 'text', None) or (response.get('text') if isinstance(response, dict) else str(response))
             # Log length to help diagnose truncation issues
-            try:
-                analysis_len = len(analysis_text)
+                        temperature=0.2,
+                        max_output_tokens=600,
                 print(f"Generated analysis length for {symbol}: {analysis_len} characters")
             except Exception:
                 analysis_len = None
