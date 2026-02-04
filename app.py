@@ -168,11 +168,12 @@ Format your response in clear sections with markdown formatting. Keep it concise
         # google-generativeai package or the server. Use defaults and
         # rely on the model's built-in safety if needed.
         try:
+            # Increase token budget to avoid mid-response truncation
             response = model.generate_content(
                 prompt,
                 generation_config=genai.types.GenerationConfig(
                     temperature=0.6,
-                    max_output_tokens=1400,
+                    max_output_tokens=4096,
                 )
             )
 
@@ -181,9 +182,20 @@ Format your response in clear sections with markdown formatting. Keep it concise
             analysis_text = getattr(response, 'text', None) or (response.get('text') if isinstance(response, dict) else str(response))
             # Log length to help diagnose truncation issues
             try:
-                print(f"Generated analysis length for {symbol}: {len(analysis_text)} characters")
+                analysis_len = len(analysis_text)
+                print(f"Generated analysis length for {symbol}: {analysis_len} characters")
             except Exception:
-                pass
+                analysis_len = None
+            # Heuristic: if returned length approaches the requested token limit
+            # or ends with an ellipsis, mark as possibly truncated.
+            possibly_truncated = False
+            try:
+                if analysis_len and analysis_len >= 3800:
+                    possibly_truncated = True
+                if isinstance(analysis_text, str) and analysis_text.strip().endswith('...'):
+                    possibly_truncated = True
+            except Exception:
+                possibly_truncated = False
         except Exception as gen_exc:
             # Log a clearer message to help debugging (do not expose secrets)
             print(f"AI generation error for {symbol}: {repr(gen_exc)}")
