@@ -171,14 +171,19 @@ Format your response in clear sections with markdown formatting. Keep it concise
             response = model.generate_content(
                 prompt,
                 generation_config=genai.types.GenerationConfig(
-                    temperature=0.7,
-                    max_output_tokens=800,
+                    temperature=0.6,
+                    max_output_tokens=1400,
                 )
             )
 
             # response may expose `.text` or be a dict-like object depending
             # on client version; handle both safely.
             analysis_text = getattr(response, 'text', None) or (response.get('text') if isinstance(response, dict) else str(response))
+            # Log length to help diagnose truncation issues
+            try:
+                print(f"Generated analysis length for {symbol}: {len(analysis_text)} characters")
+            except Exception:
+                pass
         except Exception as gen_exc:
             # Log a clearer message to help debugging (do not expose secrets)
             print(f"AI generation error for {symbol}: {repr(gen_exc)}")
