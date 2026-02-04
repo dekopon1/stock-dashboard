@@ -3,7 +3,8 @@ import requests
 import json
 import os
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timedelta
+import google.generativeai as genai
 
 # Load environment variables from .env if present
 load_dotenv()
@@ -14,17 +15,26 @@ app = Flask(__name__)
 STOCKS = ['MSFT', 'GOOG', 'AAPL', 'CRM', 'NVDA', 'AMZN', 'META', 'ORCL']
 
 # Load API keys from environment (.env or environment variables)
-# Example .env keys: STOCK_API_KEY (Finnhub), NEWS_API_KEY (NewsAPI)
+# Example .env keys: STOCK_API_KEY (Finnhub), NEWS_API_KEY (NewsAPI), GEMINI_API_KEY (Google)
 STOCK_API_KEY = os.getenv('STOCK_API_KEY')
 NEWS_API_KEY = os.getenv('NEWS_API_KEY')
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 if not STOCK_API_KEY:
     print('Warning: STOCK_API_KEY not set. Using fallback demo stock data.')
 if not NEWS_API_KEY:
     print('Warning: NEWS_API_KEY not set. Using fallback demo news.')
+if not GEMINI_API_KEY:
+    print('Warning: GEMINI_API_KEY not set. AI analysis will not be available.')
+else:
+    genai.configure(api_key=GEMINI_API_KEY)
 
 # Finnhub API endpoint
 FINNHUB_BASE_URL = 'https://finnhub.io/api/v1/quote'
+
+# Cache for analysis (in-memory, 4-hour TTL)
+analysis_cache = {}
+CACHE_TTL_SECONDS = 4 * 60 * 60  # 4 hours
 
 @app.route('/')
 def index():
@@ -106,6 +116,80 @@ def get_fallback_stock_data(symbol):
         'ORCL': {'price': 143.70, 'change': 0.70, 'changePercent': 0.49, 'isUp': True, 'previousClose': 143.00},
     }
     return fallback_data.get(symbol, {'price': 0, 'change': 0, 'changePercent': 0, 'isUp': True, 'previousClose': 0})
+
+@app.route('/api/analysis/<symbol>')
+def get_analysis(symbol):
+    """Get AI-powered analysis of why a stock is up or down"""
+    
+    # Check cache first
+    if symbol in analysis_cache:
+        cached_data, timestamp = analysis_cache[symbol]
+        if datetime.now() - timestamp < timedelta(seconds=CACHE_TTL_SECONDS):
+            print(f"Returning cached analysis for {symbol}")
+            return jsonify({'success': True, 'analysis': cached_data, 'cached': True})
+        else:
+            # Cache expired, remove it
+            del analysis_cache[symbol]
+    
+    if not GEMINI_API_KEY:
+        return jsonify({
+            'success': False,
+            'error': 'GEMINI_API_KEY not configured',
+            'analysis': 'AI analysis not available. Please configure GEMINI_API_KEY.'
+        }), 503
+    
+    try:
+        # Create Gemini model
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        # Get current stock data to include in prompt
+        stock_info = stocks_data.get(symbol) if 'stocks_data' in globals() else {}
+        
+        # Prompt Gemini to search for recent news and provide analysis
+        prompt = f"""Please perform a web search and analyze recent news about {symbol} stock. 
+
+Provide a comprehensive analysis including:
+1. **Key News**: Recent significant developments from major business news sources (Bloomberg, CNBC, Reuters, MarketWatch, etc.)
+2. **Market Context**: How {symbol} is performing relative to its sector and the broader market indices (S&P 500, NASDAQ if applicable)
+3. **Why Up/Down**: Key drivers of the stock's recent price movement
+4. **Analyst Sentiment**: Any analyst upgrades/downgrades or consensus opinions if available
+5. **Short Analysis**: A 2-3 sentence summary of the current situation
+
+Format your response in clear sections with markdown formatting. Keep it concise but informative."""
+        
+        print(f"Generating AI analysis for {symbol}...")
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.7,
+                max_output_tokens=800,
+            ),
+            safety_settings=[
+                {
+                    "category": genai.types.HarmCategory.HARM_CATEGORY_UNSPECIFIED,
+                    "threshold": genai.types.HarmBlockThreshold.BLOCK_NONE,
+                }
+            ]
+        )
+        
+        analysis_text = response.text
+        
+        # Cache the result
+        analysis_cache[symbol] = (analysis_text, datetime.now())
+        
+        return jsonify({
+            'success': True,
+            'analysis': analysis_text,
+            'cached': False
+        })
+    
+    except Exception as e:
+        print(f"Error generating analysis for {symbol}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'analysis': f'Could not generate AI analysis: {str(e)}'
+        }), 500
 
 @app.route('/api/news/<symbol>')
 def get_news(symbol):

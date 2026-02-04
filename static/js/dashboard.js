@@ -101,63 +101,53 @@ function openNewsModal(symbol) {
         modalHeader.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
     }
     
-    // Load news
-    const newsList = document.getElementById('newsList');
-    newsList.innerHTML = '<p class="loading" style="color: #6b7280; padding: 20px;">Loading news stories...</p>';
+    // Load analysis
+    const analysisList = document.getElementById('analysisList');
+    analysisList.innerHTML = '<p class="loading" style="color: #6b7280; padding: 20px;">Loading AI analysis...</p>';
     
-    fetch(`/api/news/${symbol}`)
+    fetch(`/api/analysis/${symbol}`)
         .then(response => response.json())
         .then(data => {
-            renderNews(data.news || []);
+            if (data.success) {
+                renderAnalysis(data.analysis, data.cached);
+            } else {
+                analysisList.innerHTML = `<p style="color: #ef4444; padding: 20px;">Error loading analysis: ${data.error || 'Unknown error'}</p>`;
+            }
         })
         .catch(error => {
-            console.error('Error loading news:', error);
-            newsList.innerHTML = '<p style="color: #ef4444; padding: 20px;">Error loading news. Please try again.</p>';
+            console.error('Error loading analysis:', error);
+            analysisList.innerHTML = '<p style="color: #ef4444; padding: 20px;">Error loading analysis. Please try again.</p>';
         });
     
     // Show modal
     modal.classList.add('show');
 }
 
-function renderNews(articles) {
-    const newsList = document.getElementById('newsList');
-    newsList.innerHTML = '';
+function renderAnalysis(analysis, cached) {
+    const analysisList = document.getElementById('analysisList');
+    analysisList.innerHTML = '';
     
-    if (articles.length === 0) {
-        newsList.innerHTML = '<p style="color: #9ca3af; padding: 20px;">No news articles available.</p>';
-        return;
+    // Create analysis container
+    const div = document.createElement('div');
+    div.style.cssText = 'padding: 20px; line-height: 1.6; color: #1f2937; font-size: 14px;';
+    
+    // Convert markdown to HTML (basic: bold, italics, bullet points)
+    let html = analysis
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/\n- /g, '<br/>• ')
+        .replace(/\n/g, '<br/>');
+    
+    div.innerHTML = html;
+    analysisList.appendChild(div);
+    
+    // Add cache indicator if cached
+    if (cached) {
+        const cacheNote = document.createElement('p');
+        cacheNote.style.cssText = 'padding: 10px 20px; font-size: 12px; color: #9ca3af; border-top: 1px solid #e5e7eb; margin-top: 10px;';
+        cacheNote.textContent = '(Cached analysis)';
+        analysisList.appendChild(cacheNote);
     }
-    
-    articles.forEach(article => {
-        const newsItem = document.createElement('div');
-        newsItem.className = 'news-item';
-        
-        const publishDate = new Date(article.publishedAt);
-        const formattedDate = publishDate.toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-        
-        newsItem.innerHTML = `
-            <div class="news-title">
-                <a href="${article.url}" target="_blank" rel="noopener noreferrer">
-                    ${article.title}
-                </a>
-            </div>
-            <div class="news-description">
-                ${article.description || 'No description available.'}
-            </div>
-            <div class="news-meta">
-                <span class="news-source">${article.source}</span>
-                <span class="news-time">${formattedDate}</span>
-            </div>
-        `;
-        
-        newsList.appendChild(newsItem);
-    });
 }
 
 function closeModal() {

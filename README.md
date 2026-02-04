@@ -1,12 +1,12 @@
 # Stock Price Dashboard
 
-An interactive real-time stock price dashboard displaying live data for major tech stocks with color-coded indicators and expandable news sections.
+An interactive real-time stock price dashboard displaying live data for major tech stocks with color-coded indicators and AI-powered analysis of price movements.
 
 ## Features
 
 ✅ **Real-Time Stock Prices** - Live price updates for MSFT, GOOG, AAPL, CRM, NVDA, AMZN, META, ORCL
 ✅ **Color-Coded Cards** - Green for gains, Red for losses
-✅ **Expandable News Section** - Click any stock to see top 3 latest stories
+✅ **AI-Powered Analysis** - Click any stock to see AI-generated analysis of why it's up or down
 ✅ **Auto-Refresh** - Updates every 30 seconds
 ✅ **Responsive Design** - Works on desktop, tablet, and mobile
 ✅ **Beautiful UI** - Modern gradient design with smooth animations
@@ -19,22 +19,22 @@ An interactive real-time stock price dashboard displaying live data for major te
 pip install -r requirements.txt
 ```
 
-### 2. Add API Keys (Required for Stock Prices)
+### 2. Add API Keys (Required for Stock Prices & AI Analysis)
 
 **Stock API (Required):** Sign up for a free Finnhub API key at [https://finnhub.io/](https://finnhub.io/). Free tier: 60 requests/min.
 
-**News API (Optional):** For live news stories, sign up at [NewsAPI.org](https://newsapi.org/).
+**Gemini AI API (Required for Analysis):** Get a free Gemini API key at [https://ai.google.dev/](https://ai.google.dev/). Click "Get API Key" and create a new key. Free tier: 60 requests/min.
 
 Create a file named `.env` in the project root with:
 
 ```env
 STOCK_API_KEY=your_finnhub_key_here
-NEWS_API_KEY=your_newsapi_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 The app uses `python-dotenv` to load `.env` automatically. Alternatively set environment variables directly.
 
-> **Note:** If `STOCK_API_KEY` isn't set, the app will use fallback demo stock data. If `NEWS_API_KEY` isn't set, fallback demo news will display.
+> **Note:** If `STOCK_API_KEY` isn't set, the app will use fallback demo stock data. If `GEMINI_API_KEY` isn't set, analysis will not load.
 
 ### 3. Run the Application
 
@@ -48,8 +48,10 @@ The dashboard will be available at: **http://localhost:5000**
 
 1. **View Stock Prices** - See all 8 stocks on the dashboard with current prices and changes
 2. **Identify Trends** - Green cards = up, Red cards = down
-3. **Read News** - Click any stock card to expand and view the latest 3 news stories
-4. **Auto-Refresh** - Data refreshes automatically every 30 seconds
+3. **Get AI Analysis** - Click any stock card to expand and view AI-generated analysis of price movements
+   - Analysis includes relevant news, market context, analyst sentiment, and a concise summary
+   - Results are cached for 4 hours to minimize API calls
+4. **Auto-Refresh** - Stock prices refresh automatically every 30 seconds
 
 ## File Structure
 
@@ -69,12 +71,14 @@ The dashboard will be available at: **http://localhost:5000**
 
 - `GET /` - Main dashboard page
 - `GET /api/stocks` - Get current prices for all stocks (JSON)
-- `GET /api/news/<SYMBOL>` - Get top 3 news stories for a stock (JSON)
+- `GET /api/analysis/<SYMBOL>` - Get AI-powered analysis of a stock (JSON, with web search)
 
 ## Data Sources
 
 - **Stock Prices**: Finnhub API (free tier, 60 requests/min)
-- **News**: NewsAPI.org (optional, uses fallback demo data if not configured)
+- **AI Analysis**: Google Gemini 1.5 Flash API with web search (free tier, 60 requests/min)
+  - Automatically searches for recent news, market trends, and analyst sentiment
+  - Results cached for 4 hours
 
 ## Customization
 
@@ -101,13 +105,18 @@ Edit `static/css/style.css` to change gradient colors and styling.
 ## Troubleshooting
 
 **Issue**: Stocks showing as red/down even when they're up
-- The fallback data is being used. The app is working correctly!
+- The fallback demo data is being used. The app is working correctly!
 
-**Issue**: News not loading
-- Add a NewsAPI key, or the fallback demo news will display instead
+**Issue**: Analysis not loading
+- Ensure `GEMINI_API_KEY` is set in `.env` or environment variables
+- Check that your Gemini API key is valid at [https://ai.google.dev/](https://ai.google.dev/)
 
 **Issue**: Port 5000 already in use
 - Change the port in `app.py`: `app.run(debug=True, port=5001)`
+
+**Issue**: Rate limit errors
+- Free tier limits: 60 requests/min for Finnhub and Gemini APIs
+- Analysis is cached for 4 hours, so repeated clicks on the same stock won't consume extra API quota
 
 ## Deploying to Render
 
@@ -124,7 +133,10 @@ pip install -r requirements.txt
 gunicorn app:app
 ```
 
-4. Add environment variables on Render for `NEWS_API_KEY` and `STOCK_API_KEY` (if you use them). Render will provide a `PORT` environment variable automatically.
+4. Add environment variables on Render:
+   - `STOCK_API_KEY` - Your Finnhub API key
+   - `GEMINI_API_KEY` - Your Google Gemini API key
+   - Render will provide a `PORT` environment variable automatically.
 
 This repo includes a `Procfile` and `render.yaml` to simplify deployment.
 
