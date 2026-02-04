@@ -123,7 +123,6 @@ def get_fallback_stock_data(symbol):
 @app.route('/api/analysis/<symbol>')
 def get_analysis(symbol):
     """Get AI-powered analysis of why a stock is up or down"""
-    
     # Check cache first
     if symbol in analysis_cache:
         cached_data, timestamp = analysis_cache[symbol]
@@ -131,45 +130,20 @@ def get_analysis(symbol):
             print(f"Returning cached analysis for {symbol}")
             return jsonify({'success': True, 'analysis': cached_data, 'cached': True})
         else:
-            # Cache expired, remove it
             del analysis_cache[symbol]
-    
+
     if not GEMINI_API_KEY:
         return jsonify({
             'success': False,
             'error': 'GEMINI_API_KEY not configured',
             'analysis': 'AI analysis not available. Please configure GEMINI_API_KEY.'
         }), 503
-    
+
     try:
-        # Create Gemini model
         model = genai.GenerativeModel(GEMINI_MODEL_ID)
         print(f"Using Gemini model: {GEMINI_MODEL_ID}")
-        
-        # Get current stock data to include in prompt
-        stock_info = stocks_data.get(symbol) if 'stocks_data' in globals() else {}
-        
-        # Prompt Gemini to search for recent news and provide analysis
-        prompt = f"""Please perform a web search and analyze recent news about {symbol} stock. 
 
-Provide a comprehensive analysis including:
-1. **Key News**: Recent significant developments from major business news sources (Bloomberg, CNBC, Reuters, MarketWatch, etc.)
-2. **Market Context**: How {symbol} is performing relative to its sector and the broader market indices (S&P 500, NASDAQ if applicable)
-3. **Why Up/Down**: Key drivers of the stock's recent price movement
-4. **Analyst Sentiment**: Any analyst upgrades/downgrades or consensus opinions if available
-5. **Short Analysis**: A 2-3 sentence summary of the current situation
-
-Format your response in clear sections with markdown formatting. Keep it concise but informative."""
-        
-        print(f"Generating AI analysis for {symbol}...")
-
-        # NOTE: avoid passing raw enum objects in safety_settings which
-            # Prompt Gemini to perform a brief web search and provide a short,
-            # focused analysis of WHY the stock moved today (or this week).
-            # Request a concise "best guess" (one sentence) followed by a
-            # short supporting paragraph (one brief paragraph). Keep to at
-            # most two short paragraphs.
-            prompt = f"""
+        prompt = f"""
 Conduct a quick web search for recent news and market data about {symbol}.
 
 Provide a concise, focused analysis of WHY {symbol} moved today (or this week).
@@ -178,41 +152,49 @@ Provide a concise, focused analysis of WHY {symbol} moved today (or this week).
 
 If uncertain, explicitly say "most likely" and list at most 2 possible drivers. Do not provide long background or historical context. Keep the entire response to no more than two short paragraphs.
 """
+
+        print(f"Generating AI analysis for {symbol} (concise mode)...")
+
+        try:
+            response = model.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.2,
+                    max_output_tokens=600,
+                )
             )
 
-            # response may expose `.text` or be a dict-like object depending
-            # on client version; handle both safely.
             analysis_text = getattr(response, 'text', None) or (response.get('text') if isinstance(response, dict) else str(response))
-            # Log length to help diagnose truncation issues
-                        temperature=0.2,
-                        max_output_tokens=600,
+
+            try:
+                analysis_len = len(analysis_text)
                 print(f"Generated analysis length for {symbol}: {analysis_len} characters")
             except Exception:
                 analysis_len = None
-            # Heuristic: if returned length approaches the requested token limit
-            # or ends with an ellipsis, mark as possibly truncated.
+
             possibly_truncated = False
             try:
-                if analysis_len and analysis_len >= 3800:
+                if analysis_len and analysis_len >= 550:
                     possibly_truncated = True
                 if isinstance(analysis_text, str) and analysis_text.strip().endswith('...'):
                     possibly_truncated = True
             except Exception:
                 possibly_truncated = False
+
+            analysis_cache[symbol] = (analysis_text, datetime.now())
+
+            return jsonify({
+                'success': True,
+                'analysis': analysis_text,
+                'cached': False,
+                'analysis_length': analysis_len,
+                'possibly_truncated': possibly_truncated
+            })
+
         except Exception as gen_exc:
-            # Log a clearer message to help debugging (do not expose secrets)
             print(f"AI generation error for {symbol}: {repr(gen_exc)}")
-            raise
-        
-        # Cache the result
-        analysis_cache[symbol] = (analysis_text, datetime.now())
-        
-        return jsonify({
-            'success': True,
-            'analysis': analysis_text,
-            'cached': False
-        })
-    
+            return jsonify({'success': False, 'error': str(gen_exc)}), 500
+
     except Exception as e:
         print(f"Error generating analysis for {symbol}: {e}")
         return jsonify({
