@@ -185,7 +185,8 @@ header h1 {
     max-width: 600px;
     width: 90%;
     max-height: 80vh;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
     animation: slideUp 0.3s ease;
 }
@@ -239,6 +240,8 @@ header h1 {
     padding: 30px;
     display: flex;
     flex-direction: column;
+    flex: 1;
+    min-height: 0;
 }
 
 .modal-body h3 {
@@ -256,7 +259,7 @@ header h1 {
 /* Analysis content (AI output) - make this scrollable within the modal */
 .analysis-content {
     overflow-y: auto;
-    max-height: 50vh;
+    flex: 1;
     padding-right: 8px; /* avoid clipping scrollbar over content */
 }
 
