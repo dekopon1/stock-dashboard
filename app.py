@@ -142,22 +142,30 @@ def get_analysis(symbol):
     try:
         model = genai.GenerativeModel(GEMINI_MODEL_ID)
         print(f"Using Gemini model: {GEMINI_MODEL_ID}")
+        
+        # Get current date
+        from datetime import datetime
+        today_date = datetime.now().strftime("%B %d, %Y")
 
-        prompt = f"""
-    Conduct a quick web search for recent news and market data about {symbol}.
+        prompt = f"""Act as a senior equity analyst specializing in intra-day market volatility. 
+Analyze why {symbol} is moving today, {today_date}. 
 
-    Provide a concise, focused analysis of WHY {symbol} moved today (or this week).
-    1) Start with a one-sentence "Best guess:" stating the most likely driver.
-    2) Follow with one short supporting paragraph (2-4 short sentences) citing the key evidence (e.g., earnings, product news, analyst action, macro/sector moves).
+Focus EXCLUSIVELY on news, catalysts, and market conditions from the last 24 to 72 hours. 
+Disregard long-term brand sentiment or historical performance unless it is a direct reaction to a recent event (e.g., a trailing earnings miss).
 
-    If uncertain, explicitly say "most likely" and list at most 2 possible drivers. Do not provide long background or historical context. Keep the entire response to no more than two short paragraphs.
-    Ensure the response ends with a complete sentence and does not cut off.
-    """
+Structure your response as follows:
+1. PRIMARY CATALYST: Identify the specific event (Earnings, Macro Data, FDA Approval, M&A, etc.).
+2. MARKET SENTIMENT: How are investors reacting to this news specifically? (e.g., "priced in," "surprise beat," "sector-wide selloff").
+3. QUANTITATIVE CONTEXT: Briefly mention the magnitude of the move compared to its sector peers today.
 
-        print(f"Generating AI analysis for {symbol} (concise mode)...")
+Constraints: 
+- Avoid "hallmarking" or generic corporate summaries.
+- If no specific news is found, look for "sympathy moves" (moving because a competitor reported news) or Macro factors (CPI data, Fed notes).
+- Be concise and complete all sentences.
+- Limit response to 3 short paragraphs maximum.
+"""
 
-        try:
-            response = model.generate_content(
+        print(f"Generating AI analysis for {symbol} (analyst mode)...")
                 prompt,
                 generation_config=genai.types.GenerationConfig(
                     temperature=0.15,
