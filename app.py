@@ -172,7 +172,7 @@ Constraints:
                 prompt,
                 generation_config=genai.types.GenerationConfig(
                     temperature=0.15,
-                    max_output_tokens=1200,
+                    max_output_tokens=2500,
                 )
             )
 
@@ -181,12 +181,14 @@ Constraints:
             try:
                 analysis_len = len(analysis_text)
                 print(f"Generated analysis length for {symbol}: {analysis_len} characters")
+                print(f"Analysis preview (first 200 chars): {analysis_text[:200]}")
+                print(f"Analysis ending (last 100 chars): {analysis_text[-100:]}")
             except Exception:
                 analysis_len = None
 
             possibly_truncated = False
             try:
-                if analysis_len and analysis_len >= 1100:
+                if analysis_len and analysis_len >= 2300:
                     possibly_truncated = True
                 if isinstance(analysis_text, str) and analysis_text.strip().endswith('...'):
                     possibly_truncated = True
