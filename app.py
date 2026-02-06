@@ -166,6 +166,9 @@ Constraints:
 """
 
         print(f"Generating AI analysis for {symbol} (analyst mode)...")
+
+        try:
+            response = model.generate_content(
                 prompt,
                 generation_config=genai.types.GenerationConfig(
                     temperature=0.15,
