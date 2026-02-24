@@ -142,27 +142,70 @@ def get_analysis(symbol):
     try:
         model = genai.GenerativeModel(GEMINI_MODEL_ID)
         print(f"Using Gemini model: {GEMINI_MODEL_ID}")
-        
-        # Get current date
-        from datetime import datetime
+
         today_date = datetime.now().strftime("%B %d, %Y")
+        news_window_hours = 48
+        news_items, news_used_fallback = fetch_recent_news(symbol, hours=news_window_hours, max_articles=5)
+        fresh_news_items = [] if news_used_fallback else news_items
 
-        prompt = f"""Act as a senior equity analyst specializing in intra-day market volatility. 
-Analyze why {symbol} is moving today, {today_date}. 
+        if fresh_news_items:
+            news_summary_lines = []
+            for article in fresh_news_items:
+                published_at = article.get('publishedAt')
+                published_label = 'Unknown time'
+                if published_at:
+                    try:
+                        published_dt = datetime.fromisoformat(published_at.replace('Z', '+00:00'))
+                        published_label = published_dt.strftime('%b %d %H:%M UTC')
+                    except ValueError:
+                        published_label = published_at
+                source = article.get('source') or 'Unknown source'
+                headline = article.get('title') or 'Headline unavailable'
+                description = article.get('description') or ''
+                if len(description) > 220:
+                    description = description[:217].rstrip() + '...'
+                summary = f"- {published_label} | {source}: {headline}"
+                if description:
+                    summary += f" — {description}"
+                news_summary_lines.append(summary)
+            news_summary = "\n".join(news_summary_lines)
+            guidance_points = [
+                "Anchor your reasoning in the verified headlines above and cite the catalyst type, timestamp, and source.",
+                "Keep every reference within the last 48 hours.",
+                "Avoid corporate boilerplate—focus on cause-and-effect.",
+                "If no single headline explains the move, mention sympathy or macro flows explicitly."
+            ]
+        else:
+            news_summary = "No verified company-specific catalysts detected within the last 48 hours."
+            if news_used_fallback:
+                news_summary += " NewsAPI access is unavailable, so rely on market structure and broad benchmarks."
+            guidance_points = [
+                "Since there are no fresh headlines, attribute the move to macro factors, sector rotations, or sympathy with close peers.",
+                "Reference concrete market indicators (e.g., S&P futures, yields, CPI surprises) from the last 48 hours.",
+                "State clearly that no discrete catalyst was identified for the ticker.",
+                "Avoid corporate boilerplate." 
+            ]
 
-Focus EXCLUSIVELY on news, catalysts, and market conditions from the last 24 to 72 hours. 
-Disregard long-term brand sentiment or historical performance unless it is a direct reaction to a recent event (e.g., a trailing earnings miss).
+        guidance_text = "\n".join(f"- {point}" for point in guidance_points)
+
+        prompt = f"""Act as a senior equity analyst specializing in intraday market volatility.
+Analyze why {symbol} is moving on {today_date}.
+
+Recent Headlines (last {news_window_hours}h):
+{news_summary}
+
+Guidelines:
+{guidance_text}
 
 Structure your response as follows:
 1. PRIMARY CATALYST: Identify the specific event (Earnings, Macro Data, FDA Approval, M&A, etc.).
-2. MARKET SENTIMENT: How are investors reacting to this news specifically? (e.g., "priced in," "surprise beat," "sector-wide selloff").
-3. QUANTITATIVE CONTEXT: Briefly mention the magnitude of the move compared to its sector peers today.
+2. MARKET SENTIMENT: Explain how investors are reacting (e.g., priced in, surprise beat, sector-wide selloff).
+3. QUANTITATIVE CONTEXT: Compare the magnitude of the move to sector peers or relevant indices today.
 
-Constraints: 
-- Avoid "hallmarking" or generic corporate summaries.
-- If no specific news is found, look for "sympathy moves" (moving because a competitor reported news) or Macro factors (CPI data, Fed notes).
-- Be concise and complete all sentences.
-- Limit response to 3 short paragraphs maximum.
+Constraints:
+- Stay under three concise paragraphs.
+- Focus strictly on the most recent 48 hours.
+- Be explicit when you infer moves from broader markets instead of company-specific news.
 """
 
         print(f"Generating AI analysis for {symbol} (analyst mode)...")
@@ -217,47 +260,80 @@ Constraints:
             'analysis': f'Could not generate AI analysis: {str(e)}'
         }), 500
 
-@app.route('/api/news/<symbol>')
-def get_news(symbol):
-    """Fetch top 3 news stories for a stock"""
-    try:
-        # Using NewsAPI - sign up at https://newsapi.org/
-        params = {
-            'q': f'{symbol} stock',
-            'sortBy': 'publishedAt',
-            'language': 'en',
-            'pageSize': 3
-        }
-        headers = {}
-        # NewsAPI accepts 'X-Api-Key' header or 'apiKey' query param
-        if NEWS_API_KEY:
-            headers['X-Api-Key'] = NEWS_API_KEY
+def fetch_recent_news(symbol, hours=48, max_articles=5):
+    """Fetch news limited to a time window. Returns (articles, used_fallback)."""
+    now_utc = datetime.utcnow()
+    cutoff_utc = now_utc - timedelta(hours=hours)
+    cutoff_iso = cutoff_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
+    now_iso = now_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
 
+    if not NEWS_API_KEY:
+        print('NEWS_API_KEY not set. Using fallback news data.')
+        return get_fallback_news(symbol), True
+
+    params = {
+        'q': f'{symbol} stock',
+        'sortBy': 'publishedAt',
+        'language': 'en',
+        'from': cutoff_iso,
+        'to': now_iso,
+        'pageSize': max_articles * 2
+    }
+    headers = {'X-Api-Key': NEWS_API_KEY}
+
+    try:
         response = requests.get(
             'https://newsapi.org/v2/everything',
             params=params,
-            headers=headers if headers else None,
+            headers=headers,
             timeout=5
         )
 
-        if response.status_code == 200:
-            data = response.json()
-            articles = data.get('articles', [])
-            return jsonify({
-                'success': True,
-                'news': [{
+        if response.status_code != 200:
+            print(f"NewsAPI error for {symbol}: HTTP {response.status_code}")
+            return get_fallback_news(symbol), True
+
+        data = response.json()
+        raw_articles = data.get('articles', [])
+        filtered_articles = []
+        for article in raw_articles:
+            published_at = article.get('publishedAt')
+            include_article = True
+            if published_at:
+                try:
+                    published_dt = datetime.fromisoformat(published_at.replace('Z', '+00:00'))
+                    if published_dt < cutoff_utc:
+                        include_article = False
+                except ValueError:
+                    include_article = True
+
+            if include_article:
+                filtered_articles.append({
                     'title': article.get('title'),
                     'description': article.get('description'),
                     'url': article.get('url'),
                     'source': article.get('source', {}).get('name'),
-                    'publishedAt': article.get('publishedAt')
-                } for article in articles[:3]]
-            })
-        else:
-            return jsonify({'success': False, 'news': get_fallback_news(symbol)})
+                    'publishedAt': published_at
+                })
+
+            if len(filtered_articles) >= max_articles:
+                break
+
+        return filtered_articles, False
     except Exception as e:
         print(f"Error fetching news for {symbol}: {e}")
-        return jsonify({'success': True, 'news': get_fallback_news(symbol)})
+        return get_fallback_news(symbol), True
+
+
+@app.route('/api/news/<symbol>')
+def get_news(symbol):
+    """Fetch top news stories constrained to the last 48 hours."""
+    news_items, fallback_used = fetch_recent_news(symbol, hours=48, max_articles=3)
+    return jsonify({
+        'success': True,
+        'usedFallback': fallback_used,
+        'news': news_items
+    })
 
 def get_fallback_news(symbol):
     """Fallback news data for demonstration"""
