@@ -56,12 +56,13 @@ def get_stocks():
     
     for symbol in STOCKS:
         try:
-            # Call Finnhub quote endpoint
-            params = {
-                'symbol': symbol,
-                'token': STOCK_API_KEY
-            }
-            response = requests.get(FINNHUB_BASE_URL, params=params, timeout=5)
+            # Call Finnhub quote endpoint (key via header to keep it out of server logs)
+            response = requests.get(
+                FINNHUB_BASE_URL,
+                params={'symbol': symbol},
+                headers={'X-Finnhub-Token': STOCK_API_KEY},
+                timeout=5,
+            )
             
             if response.status_code == 200:
                 quote = response.json()
